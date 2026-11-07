@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#244b3e">
+  <meta name="description" content="语音信息处理2026版逐知识点复习总览，同步查看课件原页与版本差异。">
+  <title>语音信息处理 · 2026 复习</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="vendor/katex/katex.min.js"></script>
+  <script defer src="vendor/katex/contrib/auto-render.min.js"></script>
+  <script defer src="data.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#reading-panel">跳到知识点</a>
+  <header class="app-header">
+    <a class="brand" href="#" aria-label="语音信息处理复习首页">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 28 28"><path d="M5 11v6m5-11v16m4-12v8m4-14v20m5-14v8"/></svg></span>
+      <span class="brand-name">语音信息处理<span class="brand-sub">复习手册</span></span>
+      <span class="year-tag">2026</span>
+    </a>
+    <label class="search-box">
+      <span data-icon="search" aria-hidden="true"></span>
+      <span class="sr-only">搜索知识点</span>
+      <input id="search" type="search" placeholder="搜索知识点、缩写或页码…" autocomplete="off">
+      <kbd aria-hidden="true">/</kbd>
+    </label>
+    <div class="header-actions">
+      <button id="changes-button" class="header-button" type="button" aria-pressed="false"><span data-icon="compare"></span><span>版本差异</span><span class="tiny-count">9</span></button>
+      <button id="trash-button" class="header-button trash-button" type="button" aria-label="回收站" title="回收站"><span data-icon="trash"></span><span>回收站</span></button>
+      <button id="backup-button" class="header-button backup-button" type="button" aria-label="管理编辑备份" title="导出、导入编辑备份"><span data-icon="download"></span><span>编辑备份</span></button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar" aria-label="章节导航">
+      <div class="sidebar-heading"><span>课程目录</span><span>6 章</span></div>
+      <nav id="chapter-nav"></nav>
+      <div class="sidebar-bottom">
+        <div class="progress-caption"><span>复习进度</span><span id="progress-count">0 / 136</span></div>
+        <div class="progress-track"><div id="progress-bar"></div></div>
+        <p>点击知识点右上角的圆圈<br>记录已经复习的内容。</p>
+        <a class="download-notes" href="notes/PPT原文对应.md" download><span data-icon="download"></span>下载 PPT 原文对应</a>
+        <div class="source-caption">依据 2026 版课件 · 583 页</div>
+      </div>
+    </aside>
+
+    <section id="reading-panel" class="reading-panel" aria-label="知识点阅读区">
+      <div class="reading-heading">
+        <div class="reading-toolbar">
+          <div class="chapter-select-wrap"><label class="sr-only" for="chapter-select">选择章节</label><select id="chapter-select"></select></div>
+          <div class="study-mode" role="group" aria-label="复习浏览模式">
+            <button type="button" data-study-mode="concepts" aria-pressed="true">知识点主导</button>
+            <button type="button" data-study-mode="pages" aria-pressed="false">课件页码主导</button>
+          </div>
+          <div class="eyebrow" id="chapter-eyebrow">CHAPTER 01</div>
+        </div>
+        <div class="chapter-heading">
+          <h1 id="reading-title">语音产生与感知机理</h1>
+          <div class="chapter-summary" id="chapter-summary"></div>
+        </div>
+        <div id="page-browser" class="page-browser" hidden>
+          <button id="study-previous-page" class="icon-button" type="button" aria-label="课件上一页"><span data-icon="chevronLeft"></span></button>
+          <label for="study-page-input">PDF 页码</label><input id="study-page-input" type="number" min="1" max="65" inputmode="numeric" aria-label="按课件页码浏览"><span id="study-total-pages">/ 65</span>
+          <button id="study-next-page" class="icon-button" type="button" aria-label="课件下一页"><span data-icon="chevronRight"></span></button>
+          <button id="toggle-page-index" type="button" aria-expanded="false" aria-controls="page-index">页码目录</button>
+        </div>
+        <div class="filters" role="group" aria-label="按复习等级筛选">
+          <button data-filter="all" type="button" aria-pressed="true">全部<span></span></button>
+          <button data-filter="basic" type="button" aria-pressed="false"><i class="level-dot basic-dot"></i>基本概念<span></span></button>
+          <button data-filter="mastery" type="button" aria-pressed="false"><i class="level-dot mastery-dot"></i>掌握<span></span></button>
+        </div>
+      </div>
+      <div class="read-scroll" id="read-scroll" tabindex="-1">
+        <div id="page-index" class="page-index" hidden aria-label="本章课件页码目录"></div>
+        <div id="page-context" class="page-context" hidden></div>
+        <div class="reading-hint"><span data-icon="cursor"></span><span>点选知识点，在右侧对照课件原页</span></div>
+        <div id="knowledge-list"></div>
+        <div id="empty-state" class="empty-state" hidden><span data-icon="search"></span><h2>没有找到匹配的内容</h2><p>试试“MFCC”“基频”，或换一个筛选条件。</p><button id="clear-search" class="text-button" type="button">清除搜索与筛选</button></div>
+        <details id="boundary" class="boundary"><summary><span data-icon="info"></span>本章了解范围<span>按课件标注，不考</span></summary><div id="boundary-content"></div></details>
+        <div class="reading-footnote">基本概念准备填空、选择；掌握与重点掌握准备原理和主观题。</div>
+      </div>
+    </section>
+
+    <section class="slide-panel" id="slide-panel" aria-label="PPT原页预览">
+      <div class="viewer-header">
+        <div><span class="viewer-title">课件原页</span><span class="version-tag" id="slide-version">2026 版</span></div>
+        <div class="viewer-actions">
+          <span id="wheel-hint" class="wheel-hint" title="向下滚动翻下一页，向上滚动翻上一页" hidden>滚轮翻页</span>
+          <button id="close-mobile" class="icon-button mobile-close" type="button" aria-label="关闭课件预览"><span data-icon="close"></span></button>
+        </div>
+      </div>
+      <div class="source-topic"><div id="source-chapter">第1章 · 语音产生与感知机理</div><h2 id="source-topic-title">言语链与人机语音交互</h2></div>
+      <div class="slide-stage" id="slide-stage">
+        <button class="slide-image-button" id="enlarge-slide" type="button" title="放大查看原页" aria-label="放大查看当前课件原页"><img id="slide-image" alt="" width="1600" height="1200"><span class="expand-hint"><span data-icon="expand"></span>放大原页</span></button>
+        <div class="image-message" id="image-message" hidden><p>原页暂时未能加载</p><button id="retry-image" type="button" class="text-button">重新加载</button></div>
+        <div class="slide-annotation"><span class="page-caption" id="page-caption"></span><span id="slide-instruction">点击图片可放大</span></div>
+      </div>
+      <div class="reference-section"><div class="reference-heading">本知识点对应页</div><div id="reference-pages" class="reference-pages"></div></div>
+      <div class="viewer-toolbar">
+        <button id="previous-page" class="icon-button" type="button" aria-label="上一页"><span data-icon="chevronLeft"></span></button>
+        <div class="page-jump"><label for="page-input">PDF 页码</label><input id="page-input" type="number" min="1" max="65" inputmode="numeric" aria-label="跳转到PDF页码"><span id="total-pages">/ 65</span></div>
+        <button id="next-page" class="icon-button" type="button" aria-label="下一页"><span data-icon="chevronRight"></span></button>
+        <span class="toolbar-separator"></span>
+        <a class="pdf-link" id="open-pdf" href="decks/ch1.pdf#page=60" target="_blank" rel="noopener"><span data-icon="external"></span><span>打开 PDF</span></a>
+      </div>
+      <div class="viewer-bottom"><span class="original-dot"></span>课件原页 · 保留蓝字、公式与原图</div>
+    </section>
+  </main>
+
+  <button id="mobile-viewer-button" class="mobile-viewer-button" type="button"><span data-icon="slides"></span>查看对应课件<span id="mobile-page-label">p.60</span></button>
+
+  <dialog id="image-dialog" class="image-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-toolbar"><div id="dialog-title"></div><div class="dialog-tools"><button id="zoom-out" class="icon-button" type="button" aria-label="缩小"><span data-icon="minus"></span></button><button id="zoom-reset" class="zoom-label" type="button">100%</button><button id="zoom-in" class="icon-button" type="button" aria-label="放大"><span data-icon="plus"></span></button><button id="close-dialog" class="icon-button" type="button" aria-label="关闭放大预览"><span data-icon="close"></span></button></div></div>
+    <div class="dialog-image-scroll"><img id="dialog-image" alt=""></div>
+  </dialog>
+  <dialog id="editor-dialog" class="editor-dialog" aria-labelledby="editor-title">
+    <form id="editor-form">
+      <div class="editor-heading"><div><h2 id="editor-title">编辑知识点</h2></div><button id="close-editor" class="icon-button" type="button" aria-label="完成编辑"><span data-icon="close"></span></button></div>
+      <p class="editor-context" id="editor-context"></p>
+      <label class="form-field">知识点标题<input id="edit-title" required maxlength="200" autocomplete="off"></label>
+      <div class="editor-row">
+        <label class="form-field">我的复习等级<select id="edit-level"><option value="basic">基本概念</option><option value="mastery">掌握</option><option value="priority">重点掌握</option></select></label>
+        <label class="form-field page-field">页码<input id="edit-pages" required autocomplete="off" placeholder="例如 65–70、73"></label>
+      </div>
+      <label class="form-field">知识点正文<textarea id="edit-body" required maxlength="20000" rows="11"></textarea><span class="field-hint">支持 **加粗**。独立公式用单独成行的 $$ 包围。</span></label>
+      <p id="editor-error" class="form-error" role="alert" hidden></p>
+      <div class="editor-footer"><button id="reset-concept" class="text-button" type="button">恢复课件原文</button><div><button id="cancel-editor" class="secondary-button" type="button">取消</button><button class="primary-button" type="submit">完成编辑</button></div></div>
+      <p class="local-save-note">编辑时可继续翻阅课件。在编辑区和课件控件之外按下即可保存。<br>Ctrl / ⌘ + Enter 完成 · Esc 取消。修改保存在当前浏览器，可通过“编辑备份”导出和导入。</p>
+    </form>
+  </dialog>
+  <dialog id="backup-dialog" class="backup-dialog" aria-labelledby="backup-title">
+    <div class="editor-heading"><h2 id="backup-title">我的编辑备份</h2><button id="close-backup" class="icon-button" type="button" aria-label="关闭备份管理"><span data-icon="close"></span></button></div>
+    <p id="backup-summary"></p>
+    <p class="backup-help">备份包含你编辑的知识点、复习进度和回收站。换浏览器、换电脑或清理浏览器数据前，先导出一份。</p>
+    <button id="export-backup" class="primary-button" type="button"><span data-icon="download"></span>导出备份</button>
+    <div class="import-section"><label class="form-field" for="import-backup">导入已有备份<input id="import-backup" type="file" accept="application/json,.json"></label><p class="field-hint">同一知识点以导入的版本为准，其余编辑保留。</p></div>
+    <p id="backup-error" class="form-error" role="alert" hidden></p>
+  </dialog>
+  <dialog id="trash-dialog" class="trash-dialog" aria-labelledby="trash-title">
+    <div class="editor-heading"><h2 id="trash-title">回收站</h2><button id="close-trash" class="icon-button" type="button" aria-label="关闭回收站" autofocus><span data-icon="close"></span></button></div>
+    <p id="trash-empty" class="backup-help">回收站为空。</p>
+    <ul id="trash-list" class="trash-list"></ul>
+    <p id="trash-error" class="form-error" role="alert" hidden></p>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <noscript><p class="noscript">请启用 JavaScript 来浏览知识点和同步课件。</p></noscript>
+</body>
+</html>
