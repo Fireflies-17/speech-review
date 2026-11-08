@@ -59,7 +59,10 @@
           <div class="eyebrow" id="chapter-eyebrow">CHAPTER 01</div>
         </div>
         <div class="chapter-heading">
-          <h1 id="reading-title">语音产生与感知机理</h1>
+          <div class="chapter-title-row">
+            <h1 id="reading-title">语音产生与感知机理</h1>
+            <button id="add-concept" class="secondary-button" type="button" aria-haspopup="dialog"><span data-icon="plus"></span>添加知识点</button>
+          </div>
           <div class="chapter-summary" id="chapter-summary"></div>
         </div>
         <div id="page-browser" class="page-browser" hidden>
@@ -120,7 +123,7 @@
   <dialog id="editor-dialog" class="editor-dialog" aria-labelledby="editor-title">
     <form id="editor-form">
       <div class="editor-heading"><div><h2 id="editor-title">编辑知识点</h2></div><button id="close-editor" class="icon-button" type="button" aria-label="完成编辑"><span data-icon="close"></span></button></div>
-      <p class="editor-context" id="editor-context"></p>
+      <p class="editor-context"><span id="editor-context"></span><a id="add-source-link" class="text-button" target="_blank" rel="noopener" hidden>打开当前课件页</a></p>
       <label class="form-field">知识点标题<input id="edit-title" required maxlength="200" autocomplete="off"></label>
       <div class="editor-row">
         <label class="form-field">我的复习等级<select id="edit-level"><option value="basic">基本概念</option><option value="mastery">掌握</option><option value="priority">重点掌握</option></select></label>
@@ -128,14 +131,15 @@
       </div>
       <label class="form-field">知识点正文<textarea id="edit-body" required maxlength="20000" rows="11"></textarea><span class="field-hint">支持 **加粗**。独立公式用单独成行的 $$ 包围。</span></label>
       <p id="editor-error" class="form-error" role="alert" hidden></p>
-      <div class="editor-footer"><button id="reset-concept" class="text-button" type="button">恢复课件原文</button><div><button id="cancel-editor" class="secondary-button" type="button">取消</button><button class="primary-button" type="submit">完成编辑</button></div></div>
-      <p class="local-save-note">编辑时可继续翻阅课件。在编辑区和课件控件之外按下即可保存。<br>Ctrl / ⌘ + Enter 完成 · Esc 取消。修改保存在当前浏览器，可通过“编辑备份”导出和导入。</p>
+      <div class="editor-footer"><button id="reset-concept" class="text-button" type="button">恢复课件原文</button><div><button id="cancel-editor" class="secondary-button" type="button">取消</button><button id="editor-submit" class="primary-button" type="submit">完成编辑</button></div></div>
+      <p class="local-save-note" id="edit-save-note">编辑时可继续翻阅课件。在编辑区和课件控件之外按下即可保存。<br>Ctrl / ⌘ + Enter 完成 · Esc 取消。修改保存在当前浏览器，可通过“编辑备份”导出和导入。</p>
+      <p class="local-save-note" id="add-save-note" hidden>新增知识点保存在当前浏览器，可通过“编辑备份”导出和导入。</p>
     </form>
   </dialog>
   <dialog id="backup-dialog" class="backup-dialog" aria-labelledby="backup-title">
     <div class="editor-heading"><h2 id="backup-title">我的编辑备份</h2><button id="close-backup" class="icon-button" type="button" aria-label="关闭备份管理"><span data-icon="close"></span></button></div>
     <p id="backup-summary"></p>
-    <p class="backup-help">备份包含你编辑的知识点、复习进度和回收站。换浏览器、换电脑或清理浏览器数据前，先导出一份。</p>
+    <p class="backup-help">备份包含你添加和编辑的知识点、复习进度和回收站。换浏览器、换电脑或清理浏览器数据前，先导出一份。</p>
     <button id="export-backup" class="primary-button" type="button"><span data-icon="download"></span>导出备份</button>
     <div class="import-section"><label class="form-field" for="import-backup">导入已有备份<input id="import-backup" type="file" accept="application/json,.json"></label><p class="field-hint">同一知识点以导入的版本为准，其余编辑保留。</p></div>
     <p id="backup-error" class="form-error" role="alert" hidden></p>

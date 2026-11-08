@@ -37,9 +37,10 @@
     view: 'study', chapter: 1, filter: 'all', query: '', selectedId: '', changeId: 'change-1',
     mode: saved.mode === 'pages' ? 'pages' : 'concepts', indexOpen: false,
     pagePosition: validPagePosition(saved.pagePosition) ? { ...saved.pagePosition } : { chapter: 1, page: 1 },
-    reviewed: new Set((Array.isArray(saved.reviewed) ? saved.reviewed : []).filter((id) => originals.has(id))),
-    trashed: new Set((Array.isArray(saved.trashed) ? saved.trashed : []).filter((id) => originals.has(id))),
+    reviewed: new Set(),
+    trashed: new Set(),
     edits: {},
+    additions: {},
     slide: { chapter: 1, version: 2026, page: 60 },
   };
   let visibleItems = [];
@@ -49,6 +50,7 @@
   let mobileReturnFocus = null;
   let zoom = 1;
   let editingId = '';
+  let addingChapter;
   let pointerSave = null;
   let wheelTotal = 0;
   let wheelDirection = 0;
@@ -59,23 +61,33 @@
   const levels = { basic: '基本概念', mastery: '掌握', priority: '重点掌握' };
   const changeKinds = { up: '升格', down: '降级', inferred: '继承推定', added: '新增掌握页' };
 
-  function save(edits = state.edits, reviewed = state.reviewed, trashed = state.trashed) {
+  function save({ edits = state.edits, reviewed = state.reviewed, trashed = state.trashed, additions = state.additions } = {}) {
     try {
-      localStorage.setItem(storageKey, JSON.stringify({ reviewed: [...reviewed], trashed: [...trashed], last: state.selectedId, edits, mode: state.mode, pagePosition: state.pagePosition }));
+      localStorage.setItem(storageKey, JSON.stringify({ reviewed: [...reviewed], trashed: [...trashed], last: state.selectedId, edits, additions, mode: state.mode, pagePosition: state.pagePosition }));
       return true;
     } catch { return false; }
   }
   function validatedEdit(id, entry) {
     const source = originals.get(id);
-    if (!source || !entry || typeof entry !== 'object') throw new Error('备份中含有无法识别的知识点。');
-    if (typeof entry.title !== 'string' || !entry.title.trim() || entry.title.length > 200 ||
+    if (!source) throw new Error('备份中含有无法识别的知识点。');
+    return validatedContent(source.chapter, entry);
+  }
+  function validatedAddition(id, entry) {
+    const chapter = entry?.chapter;
+    if (!/^manual-[0-9a-f]{32}$/.test(id) || originals.has(id) || !Number.isInteger(chapter) || !chapterOf(chapter)) {
+      throw new Error('新增知识点的编号或章节不正确。');
+    }
+    return { chapter, ...validatedContent(chapter, entry) };
+  }
+  function validatedContent(chapter, entry) {
+    if (!entry || typeof entry.title !== 'string' || !entry.title.trim() || entry.title.length > 200 ||
         typeof entry.body !== 'string' || !entry.body.trim() || entry.body.length > 20000 || !Object.hasOwn(levels, entry.level)) {
       throw new Error('知识点标题、正文或等级格式不正确。');
     }
     const pages = entry.pages;
-    const limit = chapterOf(source.chapter).totalPages;
+    const limit = chapterOf(chapter).totalPages;
     if (!Array.isArray(pages) || !pages.length || pages.length > limit || pages.some((page) => !Number.isInteger(page) || page < 1 || page > limit)) {
-      throw new Error(`第${source.chapter}章页码应在 1–${limit} 之间。`);
+      throw new Error(`第${chapter}章页码应在 1–${limit} 之间。`);
     }
     const unique = [...new Set(pages)];
     return { title: entry.title.trim(), body: entry.body.trim(), level: entry.level, pages: unique, primaryPage: unique.includes(entry.primaryPage) ? entry.primaryPage : unique[0] };
@@ -84,7 +96,7 @@
     const formatted = text.split(/(\$\$[\s\S]+?\$\$)/g).map((part, index) => index % 2
       ? `<div class="review-equation">${escapeHtml(part)}</div>`
       : escapeHtml(part).replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')).join('');
-    if (!text.includes('](formulas/')) return formatted;
+    if (!source || !text.includes('](formulas/')) return formatted;
 
     // Reuse only the original formula images belonging to this knowledge point.
     const template = document.createElement('template');
@@ -101,7 +113,7 @@
   }
   function rebuildConcepts() {
     knowledgeById.clear();
-    data.concepts = [...originals.values()].map((source) => {
+    for (const source of originals.values()) {
       const edit = state.edits[source.id];
       const item = edit ? {
         ...source,
@@ -114,8 +126,18 @@
         edit,
       } : { ...source, pages: [...source.pages] };
       knowledgeById.set(item.id, item);
-      return item;
-    }).filter((item) => !state.trashed.has(item.id))
+    }
+    for (const [id, item] of Object.entries(state.additions)) {
+      knowledgeById.set(id, {
+        ...item,
+        id,
+        bodyMarkdown: item.body,
+        bodyHtml: editedMarkup(item.body),
+        titleHtml: escapeHtml(item.title),
+        search: `${item.title} ${item.body}`,
+      });
+    }
+    data.concepts = [...knowledgeById.values()].filter((item) => !state.trashed.has(item.id))
       .sort((a, b) => a.chapter - b.chapter || a.primaryPage - b.primaryPage);
     data.chapters.forEach((chapter) => {
       chapter.counts = { basic: 0, mastery: 0, priority: 0 };
@@ -189,6 +211,7 @@
     $('#progress-count').textContent = `${reviewed} / ${total}`;
     $('#progress-bar').style.width = `${total ? reviewed / total * 100 : 0}%`;
     $('#changes-button').setAttribute('aria-pressed', String(state.view === 'changes'));
+    $('#add-concept').hidden = state.view !== 'study';
   }
   function conceptArticle(item) {
     const selected = item.id === state.selectedId;
@@ -210,6 +233,7 @@
   }
   function conceptSource(item) {
     const original = originals.get(item.id);
+    if (!original) return item.bodyHtml;
     const activePage = state.mode === 'pages' && !state.query ? state.slide.page : null;
     if (item.edit && item.edit.body !== item.bodyMarkdown.trim() && item.edit.body !== item.reviewMarkdown?.trim()) {
       return editedMarkup(item.edit.body, original);
@@ -616,6 +640,25 @@
     $('#edit-pages').value = pages.join('、');
     $('#editor-error').hidden = true;
   }
+  function configureEditor({ adding = false, canRestore = false } = {}) {
+    $('#editor-title').textContent = adding ? '添加知识点' : '编辑知识点';
+    $('#editor-submit').textContent = adding ? '保存知识点' : '完成编辑';
+    $('#close-editor').setAttribute('aria-label', adding ? '关闭添加知识点' : '完成编辑');
+    $('#reset-concept').hidden = !canRestore;
+    $('#add-source-link').hidden = !adding;
+    $('#edit-save-note').hidden = adding;
+    $('#add-save-note').hidden = !adding;
+  }
+  function openNewConcept() {
+    const { chapter, page } = state.slide;
+    addingChapter = chapter;
+    configureEditor({ adding: true });
+    fillEditor({ title: '', bodyMarkdown: '', level: 'basic', primaryPage: page, pages: [page] });
+    $('#editor-context').textContent = `第${chapter}章 · 请按对应课件页填写标题和正文。`;
+    $('#add-source-link').href = `decks/ch${chapter}.pdf#page=${page}`;
+    $('#editor-dialog').showModal();
+    $('#edit-title').focus();
+  }
   function openEditor(id) {
     const item = knowledgeById.get(id);
     if (!item) return;
@@ -625,7 +668,10 @@
     renderPageSource();
     fillEditor(item);
     const source = originals.get(id);
-    $('#editor-context').textContent = `第${item.chapter}章 · 课件原标：${levels[source.level]} · PDF p.${source.primaryPage}`;
+    configureEditor({ canRestore: Boolean(source) });
+    $('#editor-context').textContent = source ?
+      `第${item.chapter}章 · 课件原标：${levels[source.level]} · PDF p.${source.primaryPage}` :
+      `第${item.chapter}章 · 手动添加 · PDF p.${item.primaryPage}`;
     const article = document.querySelector(`[data-concept="${id}"]`);
     article.classList.add('editing');
     const host = document.createElement('div');
@@ -662,6 +708,34 @@
     }
     return [...new Set(pages)];
   }
+  function readEditor(chapter) {
+    const pages = parsePageInput($('#edit-pages').value, chapter);
+    return validatedContent(chapter, {
+      title: $('#edit-title').value,
+      body: $('#edit-body').value,
+      level: $('#edit-level').value,
+      pages,
+      primaryPage: pages[0],
+    });
+  }
+  function saveNewConcept(event) {
+    event.preventDefault();
+    try {
+      const chapter = addingChapter;
+      const entry = { chapter, ...readEditor(chapter) };
+      const token = [...crypto.getRandomValues(new Uint32Array(4))].map((word) => word.toString(16).padStart(8, '0')).join('');
+      const id = `manual-${token}`;
+      const additions = { ...state.additions, [id]: entry };
+      if (!save({ additions })) throw new Error('浏览器未能保存知识点。请检查是否允许此网页使用本地存储。');
+      state.additions = additions;
+      rebuildConcepts();
+      $('#editor-dialog').close();
+      showSavedEdit(id, knowledgeById.get(id), true, true, '已添加知识点');
+    } catch (error) {
+      $('#editor-error').textContent = error.message;
+      $('#editor-error').hidden = false;
+    }
+  }
   function finishPointerSave() {
     const pending = pointerSave;
     pointerSave = null;
@@ -672,22 +746,26 @@
     event?.preventDefault();
     try {
       const id = editingId;
-      const source = originals.get(editingId);
+      const source = originals.get(id);
       const previous = knowledgeById.get(id);
-      const pages = parsePageInput($('#edit-pages').value, source.chapter);
-      const edit = validatedEdit(editingId, { title: $('#edit-title').value, body: $('#edit-body').value, level: $('#edit-level').value, pages, primaryPage: pages[0] });
-      const next = { ...state.edits };
-      const defaultBody = source.reviewMarkdown ?? source.bodyMarkdown;
-      const original = edit.title === source.title && edit.body === defaultBody.trim() && edit.level === source.level &&
-        edit.primaryPage === source.primaryPage && edit.pages.length === source.pages.length && edit.pages.every((page) => source.pages.includes(page));
-      if (original) delete next[editingId]; else next[editingId] = edit;
-      if (!save(next)) throw new Error('浏览器未能保存修改。请检查是否允许此网页使用本地存储。');
-      state.edits = next;
+      const edit = readEditor(previous.chapter);
+      const edits = { ...state.edits };
+      let additions = state.additions;
+      if (source) {
+        const defaultBody = source.reviewMarkdown ?? source.bodyMarkdown;
+        const original = edit.title === source.title && edit.body === defaultBody.trim() && edit.level === source.level &&
+          edit.primaryPage === source.primaryPage && edit.pages.length === source.pages.length && edit.pages.every((page) => source.pages.includes(page));
+        if (original) delete edits[id]; else edits[id] = edit;
+      } else additions = { ...additions, [id]: { chapter: previous.chapter, ...edit } };
+      if (!save({ edits, additions })) throw new Error('浏览器未能保存修改。请检查是否允许此网页使用本地存储。');
+      state.edits = edits;
+      state.additions = additions;
       rebuildConcepts();
       const item = knowledgeById.get(id);
       const pagesChanged = item.primaryPage !== previous.primaryPage || item.pages.length !== previous.pages.length ||
         item.pages.some((page) => !previous.pages.includes(page));
-      const finish = () => showSavedEdit(id, item, source, edit, reveal, pagesChanged);
+      const message = edit.body === source?.bodyMarkdown.trim() ? '已恢复课件原文' : '修改已保存到当前浏览器';
+      const finish = () => showSavedEdit(id, item, reveal, pagesChanged, message);
       if (pointerId === null) finish();
       else {
         // Save on press, keeping the pressed control in place until its click.
@@ -705,11 +783,11 @@
     }
   }
 
-  function showSavedEdit(id, item, source, edit, reveal, pagesChanged) {
+  function showSavedEdit(id, item, reveal, pagesChanged, message) {
     detachEditor(id);
     state.selectedId = id;
     if (reveal) {
-      state.chapter = source.chapter; state.view = 'study'; state.query = ''; state.filter = 'all';
+      state.chapter = item.chapter; state.view = 'study'; state.query = ''; state.filter = 'all';
       $('#search').value = '';
     }
     const pageMode = state.mode === 'pages';
@@ -739,7 +817,7 @@
       selectConcept(id, { persist: false, page });
     }
     persistLocation();
-    toast(edit.body === source.bodyMarkdown.trim() ? '已恢复课件原文' : '修改已保存到当前浏览器');
+    toast(message);
   }
   function refreshCounts() {
     const base = matchingItems();
@@ -752,7 +830,7 @@
     });
   }
   function openBackup() {
-    $('#backup-summary').textContent = `${Object.keys(state.edits).length} 项编辑 · ${state.reviewed.size} 个已复习`;
+    $('#backup-summary').textContent = `${Object.keys(state.additions).length} 个新增 · ${Object.keys(state.edits).length} 项编辑 · ${state.reviewed.size} 个已复习`;
     $('#backup-error').hidden = true;
     $('#import-backup').value = '';
     $('#backup-dialog').showModal();
@@ -770,7 +848,7 @@
     if (!knowledgeById.has(id) || state.trashed.has(id) === move) return;
     const trashed = new Set(state.trashed);
     if (move) trashed.add(id); else trashed.delete(id);
-    if (!save(state.edits, state.reviewed, trashed)) {
+    if (!save({ trashed })) {
       if (move) toast('浏览器未能保存回收站。');
       else {
         $('#trash-error').textContent = '浏览器未能保存恢复操作。';
@@ -796,7 +874,7 @@
     }
   }
   function exportBackup() {
-    const backup = { schema: 'speech-review-2026', version: 1, exportedAt: new Date().toISOString(), edits: state.edits, reviewed: [...state.reviewed], trashed: [...state.trashed] };
+    const backup = { schema: 'speech-review-2026', version: 1, exportedAt: new Date().toISOString(), edits: state.edits, additions: state.additions, reviewed: [...state.reviewed], trashed: [...state.trashed] };
     const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a');
     link.href = url; link.download = `语音信息处理-编辑备份-${new Date().toISOString().slice(0, 10)}.json`;
@@ -807,21 +885,25 @@
     const file = event.target.files[0];
     if (!file) return;
     try {
-      if (file.size > 2 * 1024 * 1024) throw new Error('备份文件过大，请选择本网页导出的 JSON 备份。');
+      if (file.size > 16 * 1024 * 1024) throw new Error('备份文件过大，请选择本网页导出的 JSON 备份。');
       const backup = JSON.parse(await file.text());
       if (!backup || backup.schema !== 'speech-review-2026' || backup.version !== 1 || !backup.edits || typeof backup.edits !== 'object' || Array.isArray(backup.edits) || Object.keys(backup.edits).length > originals.size) {
         throw new Error('这不是语音信息处理 2026 版的有效编辑备份。');
       }
-      const next = { ...state.edits };
-      for (const [id, entry] of Object.entries(backup.edits)) next[id] = validatedEdit(id, entry);
-      const reviewed = new Set([...state.reviewed, ...(Array.isArray(backup.reviewed) ? backup.reviewed.filter((id) => originals.has(id)) : [])]);
-      const trashed = new Set([...state.trashed, ...(Array.isArray(backup.trashed) ? backup.trashed.filter((id) => originals.has(id)) : [])]);
-      if (!save(next, reviewed, trashed)) throw new Error('浏览器未能保存备份。请检查本地存储权限。');
-      state.edits = next; state.reviewed = reviewed; state.trashed = trashed;
+      const incoming = Object.hasOwn(backup, 'additions') ? backup.additions : {};
+      if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) throw new Error('备份中的新增知识点格式不正确。');
+      const edits = { ...state.edits };
+      const additions = { ...state.additions };
+      for (const [id, entry] of Object.entries(backup.edits)) edits[id] = validatedEdit(id, entry);
+      for (const [id, entry] of Object.entries(incoming)) additions[id] = validatedAddition(id, entry);
+      const reviewed = new Set([...state.reviewed, ...knownIds(backup.reviewed, additions)]);
+      const trashed = new Set([...state.trashed, ...knownIds(backup.trashed, additions)]);
+      if (!save({ edits, reviewed, trashed, additions })) throw new Error('浏览器未能保存备份。请检查本地存储权限。');
+      Object.assign(state, { edits, additions, reviewed, trashed });
       rebuildConcepts();
       render({ resetScroll: false });
       $('#backup-dialog').close();
-      toast(`已导入 ${Object.keys(backup.edits).length} 个编辑，复习进度已合并`);
+      toast(`已导入 ${Object.keys(incoming).length} 个新增、${Object.keys(backup.edits).length} 项编辑`);
     } catch (error) {
       $('#backup-error').textContent = error instanceof SyntaxError ? '文件内容不是有效的 JSON 备份。' : error.message;
       $('#backup-error').hidden = false;
@@ -848,6 +930,7 @@
   });
   $('.brand').addEventListener('click', (event) => { event.preventDefault(); state.filter = 'all'; setChapter(1); });
   $('#changes-button').addEventListener('click', () => setView(state.view === 'changes' ? 'study' : 'changes'));
+  $('#add-concept').addEventListener('click', openNewConcept);
   $('.filters').addEventListener('click', (event) => {
     const button = event.target.closest('[data-filter]');
     if (!button) return;
@@ -944,9 +1027,15 @@
   $('#zoom-in').addEventListener('click', () => { zoom = Math.min(3, zoom + .25); updateDialogImage(); });
   $('#zoom-out').addEventListener('click', () => { zoom = Math.max(.5, zoom - .25); updateDialogImage(); });
   $('#zoom-reset').addEventListener('click', () => { zoom = 1; updateDialogImage(); });
-  $('#editor-form').addEventListener('submit', saveEditor);
-  $('#close-editor').addEventListener('click', (event) => saveEditor(event));
-  $('#cancel-editor').addEventListener('click', cancelEditor);
+  $('#editor-form').addEventListener('submit', (event) => {
+    if ($('#editor-dialog').open) saveNewConcept(event); else saveEditor(event);
+  });
+  $('#close-editor').addEventListener('click', (event) => {
+    if ($('#editor-dialog').open) $('#editor-dialog').close(); else saveEditor(event);
+  });
+  $('#cancel-editor').addEventListener('click', () => {
+    if ($('#editor-dialog').open) $('#editor-dialog').close(); else cancelEditor();
+  });
   $('#reset-concept').addEventListener('click', () => { fillEditor(originals.get(editingId), { restoreSource: true }); $('#edit-body').focus(); });
   $('#backup-button').addEventListener('click', openBackup);
   $('#close-backup').addEventListener('click', () => $('#backup-dialog').close());
@@ -969,6 +1058,9 @@
       if (editingId) { event.preventDefault(); cancelEditor(); return; }
     }
     if (editingId && event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { saveEditor(event); return; }
+    if ($('#editor-dialog').open && event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault(); $('#editor-form').requestSubmit(); return;
+    }
     const editing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
     if (event.key === '/' && !editing && !document.querySelector('dialog[open]')) { event.preventDefault(); $('#search').focus(); }
     if (['ArrowLeft', 'ArrowRight'].includes(event.key) && !editing && ($('#image-dialog').open || $('#slide-panel').contains(document.activeElement))) {
@@ -1001,12 +1093,22 @@
     const position = match ? { chapter: Number(match[1]), page: Number(match[2]) } : null;
     return validPagePosition(position) ? position : null;
   }
+  function knownIds(ids, additions) {
+    return Array.isArray(ids) ? ids.filter((id) => typeof id === 'string' && (originals.has(id) || Object.hasOwn(additions, id))) : [];
+  }
 
   if (saved.edits && typeof saved.edits === 'object' && !Array.isArray(saved.edits)) {
     for (const [id, edit] of Object.entries(saved.edits)) {
       try { state.edits[id] = validatedEdit(id, edit); } catch { /* Invalid entries do not prevent reading the source material. */ }
     }
   }
+  if (saved.additions && typeof saved.additions === 'object' && !Array.isArray(saved.additions)) {
+    for (const [id, entry] of Object.entries(saved.additions)) {
+      try { state.additions[id] = validatedAddition(id, entry); } catch { /* Skip invalid local entries. */ }
+    }
+  }
+  state.reviewed = new Set(knownIds(saved.reviewed, state.additions));
+  state.trashed = new Set(knownIds(saved.trashed, state.additions));
   rebuildConcepts();
   const hashItem = knowledgeById.get(location.hash.slice(1));
   const hashPage = parsePageHash(location.hash);
